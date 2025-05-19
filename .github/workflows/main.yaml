@@ -1,0 +1,10 @@
+name: demo
+run-name: ${{ github.actor }} is testing out Github Actions!
+on: [push]
+jobs:
+  stage1:
+    runs-on: ubuntu-latest
+    steps:
+      run: echo "Job triggered by ${{github_event_name}} event."
+      run: echo "Running on ${{runner.os}} on Github."
+      run: echo "Branch\: ${{github.ref}}"
