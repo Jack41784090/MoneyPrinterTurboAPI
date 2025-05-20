@@ -12,8 +12,8 @@ resource "aws_cloudwatch_log_group" "app" {
 # ECS Task Definition
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.app_name}-${var.suffix}"
-  execution_role_arn       = var.ecs_task_execution_role_arn
-  task_role_arn            = var.ecs_task_role_arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.container_cpu
@@ -68,138 +68,6 @@ resource "aws_ecs_task_definition" "app" {
   ])
 }
 
-# Application Load Balancer
-resource "aws_lb" "app" {
-  name               = "${var.app_name}-lb-${var.suffix}"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [var.alb_security_group_id]
-  subnets            = var.subnet_ids
-
-  enable_deletion_protection = false
-}
-
-# Target Group
-resource "aws_lb_target_group" "app" {
-  name        = "${var.app_name}-tg-${var.suffix}"
-  port        = 8000
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
-
-  health_check {
-    path                = "/v1/ping"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
-    matcher             = "200"
-  }
-}
-
-# ALB Listener
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
-# ECS Service
-resource "aws_ecs_service" "app" {
-  name            = "${var.app_name}-service-${var.suffix}"
-  cluster         = aws_ecs_cluster.app.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.service_desired_count
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.subnet_ids
-    security_groups  = [var.ecs_security_group_id]
-    assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
-    container_name   = var.app_name
-    container_port   = 8000
-  }
-
-  depends_on = [
-    aws_lb_listener.http
-  ]
-}
-
-# ECS Service
-resource "aws_ecs_service" "app" {
-  name            = "${var.app_name}-service-${var.suffix}"
-  cluster         = aws_ecs_cluster.app.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.service_desired_count
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.subnet_ids
-    security_groups  = [var.ecs_security_group_id]
-    assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
-    container_name   = var.app_name
-    container_port   = 8000
-  }
-
-  depends_on = [
-    aws_lb_listener.http
-  ]
-}
-
-# Application Load Balancer
-resource "aws_lb" "app" {
-  name               = "${var.app_name}-lb-${var.suffix}"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [var.alb_security_group_id]
-  subnets            = var.subnet_ids
-
-  enable_deletion_protection = false
-}
-
-# Target Group
-resource "aws_lb_target_group" "app" {
-  name        = "${var.app_name}-tg-${var.suffix}"
-  port        = 8000
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
-
-  health_check {
-    path                = "/v1/ping"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
-    matcher             = "200"
-  }
-}
-
-# ALB Listener
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
 # Security Group for ECS Service
 resource "aws_security_group" "ecs_service" {
   name        = "${var.app_name}-ecs-sg-${var.suffix}"
@@ -218,6 +86,68 @@ resource "aws_security_group" "ecs_service" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name        = "${var.app_name}-alb-sg-${var.suffix}"
+  description = "Allow inbound traffic to ALB"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Application Load Balancer
+resource "aws_lb" "app" {
+  name               = "${var.app_name}-lb-${var.suffix}"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = var.subnet_ids
+
+  enable_deletion_protection = false
+}
+
+# Target Group
+resource "aws_lb_target_group" "app" {
+  name        = "${var.app_name}-tg-${var.suffix}"
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    path                = "/v1/ping"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    matcher             = "200"
+  }
+}
+
+# ALB Listener
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
   }
 }
 
@@ -246,68 +176,6 @@ resource "aws_ecs_service" "app" {
   ]
 }
 
-# Application Load Balancer
-resource "aws_lb" "app" {
-  name               = "${var.app_name}-lb-${var.suffix}"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = var.subnet_ids
-
-  enable_deletion_protection = false
-}
-
-# ALB Security Group
-resource "aws_security_group" "alb" {
-  name        = "${var.app_name}-alb-sg-${var.suffix}"
-  description = "Allow inbound traffic to ALB"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# Target Group
-resource "aws_lb_target_group" "app" {
-  name        = "${var.app_name}-tg-${var.suffix}"
-  port        = 8000
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
-
-  health_check {
-    path                = "/v1/ping"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
-    matcher             = "200"
-  }
-}
-
-# ALB Listener
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
 # IAM Role for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution_role" {
   name = "${var.app_name}-execution-role-${var.suffix}"
@@ -329,7 +197,7 @@ resource "aws_iam_role" "ecs_task_execution_role" {
 # Attach the AmazonECSTaskExecutionRolePolicy to the role
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 # IAM Role for ECS Task

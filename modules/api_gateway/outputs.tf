@@ -17,3 +17,8 @@ output "stage_name" {
   description = "The name of the API Gateway stage"
   value       = var.api_stage_name
 }
+
+output "api_gateway_deployment_id" {
+  description = "The ID of the API Gateway deployment"
+  value       = aws_api_gateway_deployment.api.id
+}
