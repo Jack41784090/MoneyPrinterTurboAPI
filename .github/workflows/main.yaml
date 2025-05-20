@@ -1,10 +1,39 @@
+---
 name: demo
 run-name: ${{ github.actor }} is testing out Github Actions!
-on: [push]
+'on':
+  push:
+    branches:
+      - master
 jobs:
-  stage1:
+  main:
+    name: Terraforming
+    permissions:
+      id-token: write # for OIDC
+      contents: read # for actions/checkout
     runs-on: ubuntu-latest
     steps:
-      run: echo "Job triggered by ${{github_event_name}} event."
-      run: echo "Running on ${{runner.os}} on Github."
-      run: echo "Branch\: ${{github.ref}}"
+      - name: Authenticate into AWS
+        uses: aws-actions/configure-aws-credentials/@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_RoleToAssume }}
+          aws-region: ${{ vars.AWS_Region }}
+      
+      - name: Install Repositary Code
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+
+      - name: Initialise Terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_S3BUCKETNAME }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_DYNAMODBTABLENAME }}"
+      
+      - name: Applying Terraform
+        if: github.ref == 'refs/heads/master'
+        run: terraform apply -auto-approve
