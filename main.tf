@@ -21,7 +21,7 @@ provider "aws" {
   region = var.aws_region
   
   # Optional: Uncomment and set if you want to use a specific AWS CLI profile
-  profile = "ikec-root-admin"
+  # profile = "ikec-root-admin"
   
   # Optional: Uncomment if you want to specify credentials directly (not recommended for production)
   # access_key = var.aws_access_key
