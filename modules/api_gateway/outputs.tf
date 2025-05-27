@@ -10,7 +10,7 @@ output "api_gateway_execution_arn" {
 
 output "api_endpoint" {
   description = "The API Gateway endpoint URL"
-  value       = aws_api_gateway_deployment.api.invoke_url
+  value       = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/"
 }
 
 output "stage_name" {

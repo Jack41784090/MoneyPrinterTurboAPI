@@ -1,6 +1,31 @@
+terraform {
+  # backend "s3" {
+    
+  # }
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 # Main Terraform configuration file for MoneyPrinterTurboAPI
+# AWS Provider configuration
+# Credentials can be provided via:
+# 1. AWS CLI: Run `aws configure` to set up credentials
+# 2. Environment variables: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+# 3. IAM roles (when running on EC2)
+# 4. Shared credentials file (~/.aws/credentials)
 provider "aws" {
   region = var.aws_region
+  
+  # Optional: Uncomment and set if you want to use a specific AWS CLI profile
+  profile = "ikec-root-admin"
+  
+  # Optional: Uncomment if you want to specify credentials directly (not recommended for production)
+  # access_key = var.aws_access_key
+  # secret_key = var.aws_secret_key
 }
 
 # Generate a unique suffix for resource names
@@ -35,7 +60,7 @@ module "networking" {
   suffix   = random_string.suffix.result
 }
 
-# IAM Roles and Policies
+# IAM Roles and Policies (Basic roles for ECS)
 module "iam" {
   source = "./modules/iam"
   
@@ -43,10 +68,6 @@ module "iam" {
   suffix              = random_string.suffix.result
   storage_bucket_name = module.storage.bucket_name
   storage_bucket_arn  = module.storage.bucket_arn
-  
-  # API Gateway execution ARN will be added after API Gateway module creation
-  api_gateway_execution_arn = ""
-  api_stage_name            = var.api_stage_name
 }
 
 # ECS Service
@@ -79,16 +100,29 @@ module "api_gateway" {
   api_stage_name = var.api_stage_name
 }
 
-# Update IAM module with API Gateway execution ARN
-module "iam_update" {
-  source = "./modules/iam"
-  
-  app_name                  = var.app_name
-  suffix                    = random_string.suffix.result
-  storage_bucket_name       = module.storage.bucket_name
-  storage_bucket_arn        = module.storage.bucket_arn
-  api_gateway_execution_arn = module.api_gateway.api_gateway_execution_arn
-  api_stage_name            = var.api_stage_name
+# Additional IAM Policy for API Gateway Access (created after API Gateway)
+resource "aws_iam_policy" "api_gateway_policy" {
+  name        = "${var.app_name}-api-gateway-policy-${random_string.suffix.result}"
+  description = "Policy to allow access to ${var.app_name} API Gateway"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "execute-api:Invoke"
+        ]
+        Effect   = "Allow"
+        Resource = "${module.api_gateway.api_gateway_execution_arn}/${var.api_stage_name}/*/*"
+      }
+    ]
+  })
+}
+
+# Attach API Gateway Policy to API User
+resource "aws_iam_user_policy_attachment" "api_gateway_user_policy" {
+  user       = module.iam.api_user_name
+  policy_arn = aws_iam_policy.api_gateway_policy.arn
 }
 
 # Add a stage to API Gateway deployment
@@ -109,11 +143,6 @@ output "api_endpoint" {
   value       = "${module.api_gateway.api_endpoint}${var.api_stage_name}"
 }
 
-output "alb_dns_name" {
-  description = "The DNS name of the Application Load Balancer"
-  value       = module.ecs.alb_dns_name
-}
-
 output "aws_region" {
   description = "The AWS region used for deployment"
   value       = var.aws_region
@@ -126,12 +155,12 @@ output "storage_bucket_name" {
 
 output "api_user_access_key_id" {
   description = "The access key ID for the API user"
-  value       = module.iam_update.api_access_key_id
+  value       = module.iam.api_access_key_id
   sensitive   = true
 }
 
 output "api_user_secret_access_key" {
   description = "The secret access key for the API user"
-  value       = module.iam_update.api_secret_access_key
+  value       = module.iam.api_secret_access_key
   sensitive   = true
 }

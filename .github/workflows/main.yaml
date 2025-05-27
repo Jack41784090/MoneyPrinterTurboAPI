@@ -1,39 +1,72 @@
 ---
-name: demo
-run-name: ${{ github.actor }} is testing out Github Actions!
-'on':
+name: Deploy MoneyPrinterTurbo to AWS
+run-name: ${{ github.actor }} is deploying MoneyPrinterTurbo to AWS
+on:
   push:
     branches:
       - master
 jobs:
-  main:
-    name: Terraforming
+  deploy:
+    name: Terraform and Docker Deployment
     permissions:
       id-token: write # for OIDC
       contents: read # for actions/checkout
     runs-on: ubuntu-latest
     steps:
-      - name: Authenticate into AWS
-        uses: aws-actions/configure-aws-credentials/@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_RoleToAssume }}
-          aws-region: ${{ vars.AWS_Region }}
-      
-      - name: Install Repositary Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_RoleToAssume }}
+          aws-region: ${{ vars.AWS_REGION }}
+      
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.10.5"
 
-      - name: Initialise Terraform
+      - name: Initialize Terraform
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.TF_S3BUCKETNAME }}" \
             -backend-config="region=${{ vars.AWS_REGION }}" \
             -backend-config="dynamodb_table=${{ secrets.TF_DYNAMODBTABLENAME }}"
       
-      - name: Applying Terraform
-        if: github.ref == 'refs/heads/master'
+      - name: Apply Terraform to create infrastructure
+        id: terraform_apply
         run: terraform apply -auto-approve
+      
+      # Get the ECR repository URL from Terraform output
+      - name: Get ECR Repository URL
+        id: get_ecr_repo
+        run: echo "ECR_REPO_URL=$(terraform output -raw ecr_repository_url)" >> $GITHUB_ENV
+      
+      # Login to ECR
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      # Build and push Docker image
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./MoneyPrinterTurbo
+          push: true
+          tags: ${{ env.ECR_REPO_URL }}:latest
+      
+      # Force ECS to redeploy with the new image
+      - name: Apply Terraform again to update ECS service
+        run: terraform apply -auto-approve
+      
+      # Output API information
+      - name: Get API Endpoint
+        run: |
+          echo "API Gateway Endpoint: $(terraform output -raw api_endpoint)"
+      
+      # Print success message
+      - name: Deployment Summary
+        run: |
+          echo "Deployment completed successfully!"
+          echo "The MoneyPrinterTurbo API is now available through the AWS API Gateway with IAM authentication."
+          echo "API Gateway Endpoint: $(terraform output -raw api_endpoint)"

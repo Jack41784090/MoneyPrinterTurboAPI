@@ -12,8 +12,8 @@ resource "aws_cloudwatch_log_group" "app" {
 # ECS Task Definition
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.app_name}-${var.suffix}"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  execution_role_arn       = var.ecs_task_execution_role_arn
+  task_role_arn            = var.ecs_task_role_arn
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.container_cpu
@@ -170,106 +170,7 @@ resource "aws_ecs_service" "app" {
     container_name   = var.app_name
     container_port   = 8000
   }
-
   depends_on = [
     aws_lb_listener.http
   ]
-}
-
-# IAM Role for ECS Task Execution
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "${var.app_name}-execution-role-${var.suffix}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# Attach the AmazonECSTaskExecutionRolePolicy to the role
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-# IAM Role for ECS Task
-resource "aws_iam_role" "ecs_task_role" {
-  name = "${var.app_name}-task-role-${var.suffix}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# Create IAM policy for the ECS task to interact with S3
-resource "aws_iam_policy" "task_s3_policy" {
-  name        = "${var.app_name}-s3-policy-${var.suffix}"
-  description = "Allow ${var.app_name} to interact with S3"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:ListBucket",
-          "s3:DeleteObject"
-        ]
-        Effect   = "Allow"
-        Resource = [
-          "arn:aws:s3:::${var.s3_bucket_name}",
-          "arn:aws:s3:::${var.s3_bucket_name}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# Attach policy to ECS task role
-resource "aws_iam_role_policy_attachment" "task_s3_policy_attachment" {
-  role       = aws_iam_role.ecs_task_role.name
-  policy_arn = aws_iam_policy.task_s3_policy.arn
-}
-
-output "load_balancer_dns" {
-  description = "The DNS name of the load balancer"
-  value       = aws_lb.app.dns_name
-}
-
-output "load_balancer_name" {
-  description = "The name of the load balancer"
-  value       = aws_lb.app.name
-}
-
-output "ecs_cluster_name" {
-  description = "The name of the ECS cluster"
-  value       = aws_ecs_cluster.app.name
-}
-
-output "ecs_service_name" {
-  description = "The name of the ECS service"
-  value       = aws_ecs_service.app.name
-}
-
-output "alb_dns_name" {
-  description = "The DNS name of the application load balancer"
-  value       = aws_lb.app.dns_name
 }

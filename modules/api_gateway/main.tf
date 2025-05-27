@@ -1,3 +1,6 @@
+# Get current AWS region
+data "aws_region" "current" {}
+
 # API Gateway and IAM Authentication
 resource "aws_api_gateway_rest_api" "api" {
   name        = "${var.app_name}-api-${var.suffix}"
