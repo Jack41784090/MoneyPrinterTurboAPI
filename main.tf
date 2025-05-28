@@ -68,10 +68,8 @@ module "iam" {
   suffix                     = random_string.suffix.result
   storage_bucket_name        = module.storage.bucket_name
   storage_bucket_arn         = module.storage.bucket_arn
+  api_gateway_execution_arn  = module.api_gateway.api_gateway_execution_arn
   environment               = var.environment
-  api_gateway_execution_arn = module.api_gateway.api_gateway_execution_arn
-
-  depends_on = [  aws_api_gateway_rest_api.api.execution_arn ]
 }
 
 # ECS Service (created first to provide service DNS)
