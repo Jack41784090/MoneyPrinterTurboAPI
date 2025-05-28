@@ -68,8 +68,10 @@ module "iam" {
   suffix                     = random_string.suffix.result
   storage_bucket_name        = module.storage.bucket_name
   storage_bucket_arn         = module.storage.bucket_arn
-  api_gateway_execution_arn  = module.api_gateway.api_gateway_execution_arn
   environment               = var.environment
+  api_gateway_execution_arn = module.api_gateway.api_gateway_execution_arn
+
+  depends_on = [  aws_api_gateway_rest_api.api.execution_arn ]
 }
 
 # ECS Service (created first to provide service DNS)
@@ -102,9 +104,30 @@ module "api_gateway" {
 }
 
 # API Gateway Resource Policy (applied after IAM roles are created)
+data "aws_iam_policy_document" "api_gateway_policy" {
+  statement {
+    effect = "Allow"
+    principals {
+      type = "AWS"
+      identifiers = [
+        module.iam.api_admin_role_arn,
+        module.iam.api_user_role_arn,
+        module.iam.api_readonly_role_arn
+      ]
+    }
+    actions = ["execute-api:Invoke"]
+    resources = ["${module.api_gateway.api_gateway_execution_arn}/*"]
+  }
+}
+
 resource "aws_api_gateway_rest_api_policy" "api_policy" {
   rest_api_id = module.api_gateway.api_gateway_id
-  policy      = module.iam.api_gateway_policy_document
+  policy      = data.aws_iam_policy_document.api_gateway_policy.json
+  
+  depends_on = [
+    module.iam,
+    module.api_gateway
+  ]
 }
 
 # Additional IAM Policy for API Gateway Access (created after API Gateway)

@@ -39,11 +39,6 @@ output "api_readonly_role_name" {
   value       = aws_iam_role.api_readonly_role.name
 }
 
-output "api_gateway_policy_document" {
-  description = "The IAM policy document for API Gateway resource policy"
-  value       = data.aws_iam_policy_document.api_gateway_policy.json
-}
-
 # Legacy outputs (deprecated but kept for backward compatibility)
 output "api_user_name" {
   description = "The name of the API user (DEPRECATED - use roles instead)"

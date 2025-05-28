@@ -333,19 +333,4 @@ resource "aws_iam_access_key" "api_user" {
   user = aws_iam_user.api_user.name
 }
 
-# API Gateway Resource-based Policy Data (defined after roles are created)
-data "aws_iam_policy_document" "api_gateway_policy" {
-  statement {
-    effect = "Allow"
-    principals {
-      type = "AWS"
-      identifiers = [
-        aws_iam_role.api_admin_role.arn,
-        aws_iam_role.api_user_role.arn,
-        aws_iam_role.api_readonly_role.arn
-      ]
-    }
-    actions = ["execute-api:Invoke"]
-    resources = ["${var.api_gateway_execution_arn}/*"]
-  }
-}
+# End of IAM module - API Gateway policy moved to main.tf to avoid circular dependency
