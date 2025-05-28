@@ -55,44 +55,32 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Security Group for ALB
-resource "aws_security_group" "alb" {
-  name        = "${var.app_name}-alb-sg-${var.suffix}"
-  description = "Allow inbound traffic to ALB"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# Security Group for ECS Service
+# Security Group for ECS Service (API Gateway VPC Link access only)
 resource "aws_security_group" "ecs_service" {
   name        = "${var.app_name}-ecs-sg-${var.suffix}"
-  description = "Allow inbound traffic to ${var.app_name}"
+  description = "Allow inbound traffic to ${var.app_name} from API Gateway VPC Link"
   vpc_id      = aws_vpc.main.id
 
+  # Allow traffic from API Gateway VPC Link (within VPC only)
   ingress {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.vpc_cidr]  # Only allow traffic from within VPC
+    description = "API Gateway VPC Link access"
   }
 
+  # Allow all outbound traffic for ECS tasks
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "All outbound traffic"
+  }
+
+  tags = {
+    Name = "${var.app_name}-ecs-sg-${var.suffix}"
+    Purpose = "ECS-Service-Security"
   }
 }

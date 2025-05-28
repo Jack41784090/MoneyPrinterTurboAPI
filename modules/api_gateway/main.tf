@@ -26,14 +26,15 @@ resource "aws_api_gateway_method" "proxy" {
   authorization = "AWS_IAM"
 }
 
-# API Gateway Integration
+# For cost optimization, we'll use a simple HTTP integration
+# API Gateway Integration (direct HTTP call to ECS via public IP)
 resource "aws_api_gateway_integration" "proxy" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.proxy.id
   http_method             = aws_api_gateway_method.proxy.http_method
   integration_http_method = "ANY"
   type                    = "HTTP_PROXY"
-  uri                     = "http://${var.alb_dns_name}/{proxy}"
+  uri                     = "http://${var.service_dns_name}:8000/{proxy}"
   
   request_parameters = {
     "integration.request.path.proxy" = "method.request.path.proxy"
@@ -48,14 +49,14 @@ resource "aws_api_gateway_method" "proxy_root" {
   authorization = "AWS_IAM"
 }
 
-# API Gateway Root Resource Integration
+# API Gateway Root Resource Integration (direct HTTP call)
 resource "aws_api_gateway_integration" "proxy_root" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_rest_api.api.root_resource_id
   http_method             = aws_api_gateway_method.proxy_root.http_method
   integration_http_method = "ANY"
   type                    = "HTTP_PROXY"
-  uri                     = "http://${var.alb_dns_name}"
+  uri                     = "http://${var.service_dns_name}:8000"
 }
 
 # API Gateway Deployment

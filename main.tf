@@ -72,7 +72,7 @@ module "iam" {
   environment               = var.environment
 }
 
-# ECS Service
+# ECS Service (created first to provide service DNS)
 module "ecs" {
   source = "./modules/ecs"
   
@@ -87,20 +87,19 @@ module "ecs" {
   subnet_ids                = module.networking.public_subnet_ids
   s3_bucket_name            = module.storage.bucket_name
   ecs_security_group_id     = module.networking.ecs_security_group_id
-  alb_security_group_id     = module.networking.alb_security_group_id
   ecs_task_execution_role_arn = module.iam.ecs_task_execution_role_arn
   ecs_task_role_arn         = module.iam.ecs_task_role_arn
 }
 
-# API Gateway (First pass - create without policy)
+# API Gateway (Create without load balancer for cost optimization)
 module "api_gateway" {
-  source = "./modules/api_gateway"
+    source = "./modules/api_gateway"
   
-  app_name       = var.app_name
-  suffix         = random_string.suffix.result
-  alb_dns_name   = module.ecs.alb_dns_name
-  api_stage_name = var.api_stage_name
-  environment    = var.environment
+  app_name                      = var.app_name
+  suffix                        = random_string.suffix.result
+  service_dns_name              = module.ecs.service_dns_name
+  api_stage_name                = var.api_stage_name
+  environment                   = var.environment
 }
 
 # API Gateway Resource Policy (applied after IAM roles are created)

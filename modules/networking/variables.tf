@@ -17,5 +17,5 @@ variable "vpc_cidr" {
 variable "public_subnet_count" {
   description = "Number of public subnets to create"
   type        = number
-  default     = 2
+  default     = 1  # Changed to 1 for cost optimization since no ALB is needed
 }

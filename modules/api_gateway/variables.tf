@@ -8,8 +8,8 @@ variable "suffix" {
   type        = string
 }
 
-variable "alb_dns_name" {
-  description = "The DNS name of the Application Load Balancer"
+variable "service_dns_name" {
+  description = "The DNS name of the ECS service via service discovery"
   type        = string
 }
 

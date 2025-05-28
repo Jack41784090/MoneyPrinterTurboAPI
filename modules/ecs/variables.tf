@@ -53,11 +53,6 @@ variable "ecs_security_group_id" {
   type        = string
 }
 
-variable "alb_security_group_id" {
-  description = "The ID of the security group for the ALB"
-  type        = string
-}
-
 variable "ecs_task_execution_role_arn" {
   description = "The ARN of the ECS task execution role"
   type        = string

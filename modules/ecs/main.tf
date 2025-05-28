@@ -1,12 +1,59 @@
 # ECS Cluster
 resource "aws_ecs_cluster" "app" {
   name = "${var.app_name}-cluster-${var.suffix}"
+
+  tags = {
+    Name = "${var.app_name}-cluster-${var.suffix}"
+    Environment = "production"
+  }
 }
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.app_name}-${var.suffix}"
   retention_in_days = 30
+
+  tags = {
+    Name = "${var.app_name}-logs"
+    Environment = "production"
+  }
+}
+
+# Service Discovery Private DNS Namespace
+resource "aws_service_discovery_private_dns_namespace" "app" {
+  name        = "${var.app_name}-${var.suffix}.local"
+  description = "Private DNS namespace for ${var.app_name}"
+  vpc         = var.vpc_id
+
+  tags = {
+    Name = "${var.app_name}-dns-namespace"
+    Environment = "production"
+  }
+}
+
+# Service Discovery Service
+resource "aws_service_discovery_service" "app" {
+  name = var.app_name
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.app.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = {
+    Name = "${var.app_name}-service-discovery"
+    Environment = "production"
+  }
 }
 
 # ECS Task Definition
@@ -64,113 +111,52 @@ resource "aws_ecs_task_definition" "app" {
           "awslogs-stream-prefix" = "ecs"
         }
       }
+
+      healthCheck = {
+        command = [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/v1/ping || exit 1"
+        ]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 60
+      }
     }
   ])
-}
 
-# Security Group for ECS Service
-resource "aws_security_group" "ecs_service" {
-  name        = "${var.app_name}-ecs-sg-${var.suffix}"
-  description = "Allow inbound traffic to ${var.app_name}"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port       = 8000
-    to_port         = 8000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]  # Only allow traffic from ALB
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  tags = {
+    Name = "${var.app_name}-task-definition"
+    Environment = "production"
   }
 }
 
-# ALB Security Group
-resource "aws_security_group" "alb" {
-  name        = "${var.app_name}-alb-sg-${var.suffix}"
-  description = "Allow inbound traffic to ALB"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# Application Load Balancer - Make it internal to prevent direct access
-resource "aws_lb" "app" {
-  name               = "${var.app_name}-lb-${var.suffix}"
-  internal           = true  # Changed to internal to prevent direct internet access
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = var.subnet_ids
-
-  enable_deletion_protection = false
-}
-
-# Target Group
-resource "aws_lb_target_group" "app" {
-  name        = "${var.app_name}-tg-${var.suffix}"
-  port        = 8000
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
-
-  health_check {
-    path                = "/v1/ping"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
-    matcher             = "200"
-  }
-}
-
-# ALB Listener
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
-# ECS Service
+# ECS Service (No Load Balancer, with Service Discovery)
 resource "aws_ecs_service" "app" {
   name            = "${var.app_name}-service-${var.suffix}"
   cluster         = aws_ecs_cluster.app.id
   task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.service_desired_count
+  desired_count   = 1  # Single task for cost optimization
   launch_type     = "FARGATE"
+    # Enable service discovery for API Gateway direct connection
+  service_registries {
+    registry_arn = aws_service_discovery_service.app.arn
+  }
 
   network_configuration {
     subnets          = var.subnet_ids
-    security_groups  = [aws_security_group.ecs_service.id]
-    assign_public_ip = true
+    security_groups  = [var.ecs_security_group_id]
+    assign_public_ip = true  # Required for API Gateway to reach ECS directly
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
-    container_name   = var.app_name
-    container_port   = 8000
+  # Deployment configuration for rolling updates
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 50
+
+  tags = {
+    Name = "${var.app_name}-service"
+    Environment = "production"
   }
-  depends_on = [
-    aws_lb_listener.http
-  ]
 }
+
+
