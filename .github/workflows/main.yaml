@@ -70,3 +70,7 @@ jobs:
           echo "Deployment completed successfully!"
           echo "The MoneyPrinterTurbo API is now available through the AWS API Gateway with IAM authentication."
           echo "API Gateway Endpoint: $(terraform output -raw api_endpoint)"
+
+      - name: Destroy if failed
+        if: failure()
+        run: terraform destroy -auto-approve
