@@ -75,10 +75,10 @@ resource "aws_security_group" "ecs_service" {
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]  # Only allow traffic from ALB
   }
 
   egress {
@@ -110,10 +110,10 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# Application Load Balancer
+# Application Load Balancer - Make it internal to prevent direct access
 resource "aws_lb" "app" {
   name               = "${var.app_name}-lb-${var.suffix}"
-  internal           = false
+  internal           = true  # Changed to internal to prevent direct internet access
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = var.subnet_ids

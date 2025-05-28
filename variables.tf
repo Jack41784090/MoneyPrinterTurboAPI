@@ -10,6 +10,17 @@ variable "app_name" {
   default     = "moneyprinterturbo"
 }
 
+variable "environment" {
+  description = "The deployment environment (dev, staging, prod)"
+  type        = string
+  default     = "prod"
+  
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, staging, prod."
+  }
+}
+
 variable "storage_bucket_name" {
   description = "The name of the S3 bucket for storing MoneyPrinterTurbo files"
   type        = string

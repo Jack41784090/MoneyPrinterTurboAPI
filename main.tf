@@ -60,14 +60,16 @@ module "networking" {
   suffix   = random_string.suffix.result
 }
 
-# IAM Roles and Policies (Basic roles for ECS)
+# IAM Roles and Policies
 module "iam" {
   source = "./modules/iam"
   
-  app_name            = var.app_name
-  suffix              = random_string.suffix.result
-  storage_bucket_name = module.storage.bucket_name
-  storage_bucket_arn  = module.storage.bucket_arn
+  app_name                   = var.app_name
+  suffix                     = random_string.suffix.result
+  storage_bucket_name        = module.storage.bucket_name
+  storage_bucket_arn         = module.storage.bucket_arn
+  api_gateway_execution_arn  = module.api_gateway.api_gateway_execution_arn
+  environment               = var.environment
 }
 
 # ECS Service
@@ -90,7 +92,7 @@ module "ecs" {
   ecs_task_role_arn         = module.iam.ecs_task_role_arn
 }
 
-# API Gateway
+# API Gateway (First pass - create without policy)
 module "api_gateway" {
   source = "./modules/api_gateway"
   
@@ -98,6 +100,13 @@ module "api_gateway" {
   suffix         = random_string.suffix.result
   alb_dns_name   = module.ecs.alb_dns_name
   api_stage_name = var.api_stage_name
+  environment    = var.environment
+}
+
+# API Gateway Resource Policy (applied after IAM roles are created)
+resource "aws_api_gateway_rest_api_policy" "api_policy" {
+  rest_api_id = module.api_gateway.api_gateway_id
+  policy      = module.iam.api_gateway_policy_document
 }
 
 # Additional IAM Policy for API Gateway Access (created after API Gateway)
@@ -119,17 +128,10 @@ resource "aws_iam_policy" "api_gateway_policy" {
   })
 }
 
-# Attach API Gateway Policy to API User
+# Attach API Gateway Policy to API User (Legacy - for backward compatibility)
 resource "aws_iam_user_policy_attachment" "api_gateway_user_policy" {
   user       = module.iam.api_user_name
   policy_arn = aws_iam_policy.api_gateway_policy.arn
-}
-
-# Add a stage to API Gateway deployment
-resource "aws_api_gateway_stage" "api" {
-  deployment_id = module.api_gateway.api_gateway_deployment_id
-  rest_api_id   = module.api_gateway.api_gateway_id
-  stage_name    = var.api_stage_name
 }
 
 # Outputs
@@ -140,7 +142,7 @@ output "ecr_repository_url" {
 
 output "api_endpoint" {
   description = "The API Gateway endpoint URL"
-  value       = "${module.api_gateway.api_endpoint}${var.api_stage_name}"
+  value       = module.api_gateway.api_endpoint
 }
 
 output "aws_region" {
@@ -153,14 +155,70 @@ output "storage_bucket_name" {
   value       = module.storage.bucket_name
 }
 
+output "unique_suffix" {
+  description = "The unique suffix used for resource names"
+  value       = random_string.suffix.result
+}
+
+# Role-Based Access Control Outputs
+output "api_admin_role_arn" {
+  description = "ARN of the API admin role (full access)"
+  value       = module.iam.api_admin_role_arn
+}
+
+output "api_user_role_arn" {
+  description = "ARN of the API user role (read/write, no admin)"
+  value       = module.iam.api_user_role_arn
+}
+
+output "api_readonly_role_arn" {
+  description = "ARN of the API readonly role (read-only)"
+  value       = module.iam.api_readonly_role_arn
+}
+
+output "role_usage_instructions" {
+  description = "Instructions for using role-based access"
+  value = <<-EOT
+    Role-Based Access Control Setup Complete!
+    
+    Available Roles:
+    1. Admin Role: ${module.iam.api_admin_role_arn}
+       - Full API access (all endpoints)
+       - S3 read/write/delete access
+       - External ID: ${var.app_name}-admin-${random_string.suffix.result}
+    
+    2. User Role: ${module.iam.api_user_role_arn}
+       - API read/write access (no admin endpoints)
+       - S3 read/write access (no delete)
+       - External ID: ${var.app_name}-user-${random_string.suffix.result}
+    
+    3. Read-Only Role: ${module.iam.api_readonly_role_arn}
+       - API read-only access (GET requests only)
+       - S3 read-only access
+       - External ID: ${var.app_name}-readonly-${random_string.suffix.result}
+    
+    Usage Examples:
+    
+    PowerShell (Windows):
+    .\scripts\assume_role.ps1 -Role "admin" -Suffix "${random_string.suffix.result}"
+    
+    Python API Client:
+    python scripts/api_access_helper.py --role admin --action list_videos --api-endpoint "${module.api_gateway.api_endpoint}" --suffix "${random_string.suffix.result}"
+    
+    AWS CLI (after assuming role):
+    aws sts assume-role --role-arn ${module.iam.api_admin_role_arn} --role-session-name MySession --external-id ${var.app_name}-admin-${random_string.suffix.result}
+  EOT
+}
+
+# Legacy outputs (deprecated but kept for backward compatibility)
 output "api_user_access_key_id" {
-  description = "The access key ID for the API user"
+  description = "The access key ID for the API user (DEPRECATED - use roles instead)"
   value       = module.iam.api_access_key_id
   sensitive   = true
 }
 
 output "api_user_secret_access_key" {
-  description = "The secret access key for the API user"
+  description = "The secret access key for the API user (DEPRECATED - use roles instead)"
   value       = module.iam.api_secret_access_key
   sensitive   = true
 }

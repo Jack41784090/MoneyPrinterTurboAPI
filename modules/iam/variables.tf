@@ -17,3 +17,14 @@ variable "storage_bucket_arn" {
   description = "The ARN of the S3 bucket"
   type        = string
 }
+
+variable "api_gateway_execution_arn" {
+  description = "The execution ARN of the API Gateway"
+  type        = string
+}
+
+variable "environment" {
+  description = "The deployment environment (dev, staging, prod)"
+  type        = string
+  default     = "prod"
+}

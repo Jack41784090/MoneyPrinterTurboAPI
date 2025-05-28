@@ -18,3 +18,9 @@ variable "api_stage_name" {
   type        = string
   default     = "prod"
 }
+
+variable "environment" {
+  description = "The deployment environment (dev, staging, prod)"
+  type        = string
+  default     = "prod"
+}
