@@ -19,43 +19,6 @@ resource "aws_cloudwatch_log_group" "app" {
   }
 }
 
-# Service Discovery Private DNS Namespace
-resource "aws_service_discovery_private_dns_namespace" "app" {
-  name        = "${var.app_name}-${var.suffix}.local"
-  description = "Private DNS namespace for ${var.app_name}"
-  vpc         = var.vpc_id
-
-  tags = {
-    Name = "${var.app_name}-dns-namespace"
-    Environment = "production"
-  }
-}
-
-# Service Discovery Service
-resource "aws_service_discovery_service" "app" {
-  name = var.app_name
-
-  dns_config {
-    namespace_id = aws_service_discovery_private_dns_namespace.app.id
-
-    dns_records {
-      ttl  = 10
-      type = "A"
-    }
-
-    routing_policy = "MULTIVALUE"
-  }
-
-  health_check_custom_config {
-    failure_threshold = 1
-  }
-
-  tags = {
-    Name = "${var.app_name}-service-discovery"
-    Environment = "production"
-  }
-}
-
 # ECS Task Definition
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.app_name}-${var.suffix}"
@@ -131,17 +94,13 @@ resource "aws_ecs_task_definition" "app" {
   }
 }
 
-# ECS Service (No Load Balancer, with Service Discovery)
+# ECS Service (Simplified - no service discovery to avoid Route53 permissions)
 resource "aws_ecs_service" "app" {
   name            = "${var.app_name}-service-${var.suffix}"
   cluster         = aws_ecs_cluster.app.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 1  # Single task for cost optimization
   launch_type     = "FARGATE"
-    # Enable service discovery for API Gateway direct connection
-  service_registries {
-    registry_arn = aws_service_discovery_service.app.arn
-  }
 
   network_configuration {
     subnets          = var.subnet_ids

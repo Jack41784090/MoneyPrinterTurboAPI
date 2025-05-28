@@ -8,11 +8,6 @@ variable "suffix" {
   type        = string
 }
 
-variable "service_dns_name" {
-  description = "The DNS name of the ECS service via service discovery"
-  type        = string
-}
-
 variable "api_stage_name" {
   description = "The name of the API Gateway stage"
   type        = string

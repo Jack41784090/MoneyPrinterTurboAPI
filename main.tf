@@ -93,11 +93,10 @@ module "ecs" {
 
 # API Gateway (Create without load balancer for cost optimization)
 module "api_gateway" {
-    source = "./modules/api_gateway"
+  source = "./modules/api_gateway"
   
   app_name                      = var.app_name
   suffix                        = random_string.suffix.result
-  service_dns_name              = module.ecs.service_dns_name
   api_stage_name                = var.api_stage_name
   environment                   = var.environment
 }

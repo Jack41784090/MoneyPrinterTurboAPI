@@ -71,22 +71,8 @@ resource "aws_iam_role_policy_attachment" "task_s3_policy_attachment" {
   policy_arn = aws_iam_policy.task_s3_policy.arn
 }
 
-# API Gateway Resource-based Policy Data
-data "aws_iam_policy_document" "api_gateway_policy" {
-  statement {
-    effect = "Allow"
-    principals {
-      type = "AWS"
-      identifiers = [
-        aws_iam_role.api_admin_role.arn,
-        aws_iam_role.api_user_role.arn,
-        aws_iam_role.api_readonly_role.arn
-      ]
-    }
-    actions = ["execute-api:Invoke"]
-    resources = ["${var.api_gateway_execution_arn}/*"]
-  }
-}
+# API Gateway Resource-based Policy Data (move to after roles are defined)
+# This will be created later in the file after the roles
 
 # IAM Role for API Administrators (Full Access)
 resource "aws_iam_role" "api_admin_role" {
@@ -345,4 +331,21 @@ resource "aws_iam_user" "api_user" {
 # Access Key for API User (Deprecated - keeping for backward compatibility)
 resource "aws_iam_access_key" "api_user" {
   user = aws_iam_user.api_user.name
+}
+
+# API Gateway Resource-based Policy Data (defined after roles are created)
+data "aws_iam_policy_document" "api_gateway_policy" {
+  statement {
+    effect = "Allow"
+    principals {
+      type = "AWS"
+      identifiers = [
+        aws_iam_role.api_admin_role.arn,
+        aws_iam_role.api_user_role.arn,
+        aws_iam_role.api_readonly_role.arn
+      ]
+    }
+    actions = ["execute-api:Invoke"]
+    resources = ["${var.api_gateway_execution_arn}/*"]
+  }
 }

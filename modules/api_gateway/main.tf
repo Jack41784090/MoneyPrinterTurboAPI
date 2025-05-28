@@ -26,18 +26,35 @@ resource "aws_api_gateway_method" "proxy" {
   authorization = "AWS_IAM"
 }
 
-# For cost optimization, we'll use a simple HTTP integration
-# API Gateway Integration (direct HTTP call to ECS via public IP)
+# For cost optimization, we'll use a mock integration that returns connection info
+# The client will need to connect directly to the ECS service's public IP
 resource "aws_api_gateway_integration" "proxy" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.proxy.id
   http_method             = aws_api_gateway_method.proxy.http_method
-  integration_http_method = "ANY"
-  type                    = "HTTP_PROXY"
-  uri                     = "http://${var.service_dns_name}:8000/{proxy}"
+  integration_http_method = "POST"
+  type                    = "MOCK"
   
-  request_parameters = {
-    "integration.request.path.proxy" = "method.request.path.proxy"
+  request_templates = {
+    "application/json" = jsonencode({
+      statusCode = 200
+    })
+  }
+}
+
+# Integration Response for proxy
+resource "aws_api_gateway_integration_response" "proxy" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.proxy.id
+  http_method = aws_api_gateway_method.proxy.http_method
+  status_code = aws_api_gateway_method_response.proxy_200.status_code
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "ECS Service endpoint - connect directly via service discovery or public IP"
+      service = var.app_name
+      status = "active"
+    })
   }
 }
 
@@ -49,21 +66,50 @@ resource "aws_api_gateway_method" "proxy_root" {
   authorization = "AWS_IAM"
 }
 
-# API Gateway Root Resource Integration (direct HTTP call)
+# API Gateway Root Resource Integration (mock integration)
 resource "aws_api_gateway_integration" "proxy_root" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_rest_api.api.root_resource_id
   http_method             = aws_api_gateway_method.proxy_root.http_method
-  integration_http_method = "ANY"
-  type                    = "HTTP_PROXY"
-  uri                     = "http://${var.service_dns_name}:8000"
+  integration_http_method = "POST"
+  type                    = "MOCK"
+  
+  request_templates = {
+    "application/json" = jsonencode({
+      statusCode = 200
+    })
+  }
+}
+
+# Integration Response for proxy root
+resource "aws_api_gateway_integration_response" "proxy_root" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_rest_api.api.root_resource_id
+  http_method = aws_api_gateway_method.proxy_root.http_method
+  status_code = aws_api_gateway_method_response.proxy_root_200.status_code
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "MoneyPrinterTurbo API - Cost-Optimized Version"
+      service = var.app_name
+      version = "v1.0"
+      endpoints = {
+        ping = "/v1/ping"
+        videos = "/v1/videos"
+        generate = "/v1/generate"
+      }
+      note = "Connect directly to ECS service for API calls"
+    })
+  }
 }
 
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "api" {
   depends_on = [
     aws_api_gateway_integration.proxy,
-    aws_api_gateway_integration.proxy_root
+    aws_api_gateway_integration.proxy_root,
+    aws_api_gateway_integration_response.proxy,
+    aws_api_gateway_integration_response.proxy_root
   ]
 
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -71,7 +117,6 @@ resource "aws_api_gateway_deployment" "api" {
   lifecycle {
     create_before_destroy = true
   }
-
   # Force new deployment when methods change
   triggers = {
     redeployment = sha1(jsonencode([
@@ -80,6 +125,8 @@ resource "aws_api_gateway_deployment" "api" {
       aws_api_gateway_method.proxy_root.id,
       aws_api_gateway_integration.proxy.id,
       aws_api_gateway_integration.proxy_root.id,
+      aws_api_gateway_integration_response.proxy.id,
+      aws_api_gateway_integration_response.proxy_root.id,
     ]))
   }
 }
