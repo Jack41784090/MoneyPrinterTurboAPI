@@ -1,7 +1,12 @@
 terraform {
-  # backend "s3" {
-    
-  # }
+  backend "s3" {
+    # These values will be provided via -backend-config during terraform init
+    # bucket         = "your-terraform-state-bucket"
+    # key            = "terraform.tfstate"
+    # region         = "us-east-1"
+    # dynamodb_table = "your-terraform-locks-table"
+    # encrypt        = true
+  }
   required_providers {
     aws = {
       source  = "hashicorp/aws"
