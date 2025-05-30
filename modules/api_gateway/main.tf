@@ -1,6 +1,45 @@
 # Get current AWS region
 data "aws_region" "current" {}
 
+# Get current AWS caller identity
+data "aws_caller_identity" "current" {}
+
+# CloudWatch role for API Gateway (required for logging)
+resource "aws_iam_role" "api_gateway_cloudwatch" {
+  name = "${var.app_name}-api-gateway-cloudwatch-${var.suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.app_name}-api-gateway-cloudwatch-role"
+    Environment = var.environment
+  }
+}
+
+# Attach the managed policy for CloudWatch Logs
+resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch" {
+  role       = aws_iam_role.api_gateway_cloudwatch.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+# Set the CloudWatch role ARN at the account level
+resource "aws_api_gateway_account" "api_gateway_account" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
+
+  depends_on = [aws_iam_role_policy_attachment.api_gateway_cloudwatch]
+}
+
 # API Gateway and IAM Authentication
 resource "aws_api_gateway_rest_api" "api" {
   name        = "${var.app_name}-api-${var.suffix}"
@@ -139,6 +178,11 @@ resource "aws_api_gateway_stage" "api" {
 
   # Enable logging and monitoring
   xray_tracing_enabled = true
+
+  depends_on = [
+    aws_api_gateway_account.api_gateway_account,
+    aws_cloudwatch_log_group.api_gateway
+  ]
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway.arn
