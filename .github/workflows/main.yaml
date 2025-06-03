@@ -32,7 +32,8 @@ jobs:
           terraform init \
             -backend-config="bucket=${{ secrets.TF_S3BUCKETNAME }}" \
             -backend-config="region=${{ vars.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ secrets.TF_DYNAMODBTABLENAME }}"
+            -backend-config="dynamodb_table=${{ secrets.TF_DYNAMODBTABLENAME }}" \
+            -backend-config="key=."
       
       - name: Apply Terraform to create infrastructure
         id: terraform_apply
