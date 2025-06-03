@@ -28,6 +28,9 @@ resource "aws_ecs_task_definition" "app" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.container_cpu
   memory                   = var.container_memory
+  lifecycle {
+    create_before_destroy = true
+  }
 
   container_definitions = jsonencode([
     {
@@ -78,7 +81,7 @@ resource "aws_ecs_task_definition" "app" {
       healthCheck = {
         command = [
           "CMD-SHELL",
-          "curl -f http://localhost:8000/v1/ping || exit 1"
+          "curl -f http://localhost:8000/ || exit 1"
         ]
         interval    = 30
         timeout     = 5
