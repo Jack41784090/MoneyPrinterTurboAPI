@@ -184,6 +184,17 @@ output "unique_suffix" {
   value       = random_string.suffix.result
 }
 
+# ECS Outputs
+output "ecs_cluster_name" {
+  description = "The name of the ECS cluster"
+  value       = module.ecs.ecs_cluster_name
+}
+
+output "ecs_service_name" {
+  description = "The name of the ECS service"
+  value       = module.ecs.ecs_service_name
+}
+
 # Role-Based Access Control Outputs
 output "api_admin_role_arn" {
   description = "ARN of the API admin role (full access)"

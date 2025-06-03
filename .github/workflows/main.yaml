@@ -21,12 +21,11 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_RoleToAssume }}
           aws-region: ${{ vars.AWS_REGION }}
-      
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.10.5"
-
+      
       - name: Initialize Terraform
         run: |
           terraform init \
@@ -35,9 +34,17 @@ jobs:
             -backend-config="dynamodb_table=${{ secrets.TF_DYNAMODBTABLENAME }}" \
             -backend-config="key=dev/terraform.tfstate"
       
+      - name: Terraform Plan (handle state drift)
+        id: plan
+        run: |
+          # Try to refresh state first to catch any drift
+          terraform refresh || echo "Refresh had issues, continuing with plan..."
+          terraform plan -out=tfplan
+        continue-on-error: false
+      
       - name: Apply Terraform to create infrastructure
         id: terraform_apply
-        run: terraform apply -auto-approve
+        run: terraform apply tfplan
       
       # Get the ECR repository URL from Terraform output
       - name: Get ECR Repository URL
@@ -56,9 +63,12 @@ jobs:
           push: true
           tags: ${{ env.ECR_REPO_URL }}:latest
       
-      # Force ECS to redeploy with the new image
-      - name: Apply Terraform again to update ECS service
-        run: terraform apply -auto-approve
+      # Force ECS service to redeploy with the new image
+      - name: Force ECS service update
+        run: |
+          CLUSTER_NAME=$(terraform output -raw ecs_cluster_name)
+          SERVICE_NAME=$(terraform output -raw ecs_service_name)
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
       
       # Output API information
       - name: Get API Endpoint
